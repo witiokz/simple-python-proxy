@@ -18,10 +18,11 @@ class HttpHandler(BaseHTTPRequestHandler):
     url_prefix = 'https://habr.com'
     encoding = "utf-8"
     htmlParser = 'html.parser'
+    default_article = 'ru/company/yandex/blog/258673/'
 
     def do_GET(self):
         try:
-            uri = self.url_prefix + self.path
+            uri = self.url_prefix + (self.path + self.default_article if self.path == '/' else self.path)
             with urllib.request.urlopen(uri) as response:
                 data = response.read()
                 content_type = mimetypes.MimeTypes().guess_type(os.path.basename(uri).split('?')[0])[0]
@@ -72,4 +73,5 @@ class HttpHandler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     server = HTTPServer((host_name, host_port), HttpHandler)
+    print('Server started on {}:{}'.format(host_name, host_port))
     server.serve_forever()
