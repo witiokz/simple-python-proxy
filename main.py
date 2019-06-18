@@ -1,13 +1,17 @@
-import urllib
+import copy
+import html
 import mimetypes
-import re
 import os
+import re
+import urllib
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.error import URLError
-from urllib.request import urlopen
-from urllib.parse import urlparse
-from bs4 import BeautifulSoup
 from pathlib import Path
+from string import punctuation
+from urllib.error import HTTPError
+from urllib.parse import urlparse
+from urllib.request import urlopen
+
+from bs4 import BeautifulSoup, Comment
 
 host_name = 'localhost'
 host_port = 8232
@@ -27,38 +31,60 @@ class HttpHandler(BaseHTTPRequestHandler):
                 data = response.read()
                 content_type = mimetypes.MimeTypes().guess_type(os.path.basename(uri).split('?')[0])[0]
                 self.send_response(200)
+                self.send_header('Content-type', content_type if Path(uri).suffix != '' else content_type)
                 self.end_headers()
 
                 if Path(uri).suffix == '':
-                    content_type = 'text/html'
-                    html_text = self.process_html(data.decode(self.encoding))
-                    html_text = self.process_links(html_text)
-                    self.wfile.write(html_text.encode(self.encoding))
+                    self.wfile.write(self.process(data).encode(self.encoding))
                 else:
                     self.wfile.write(data)
-
-                self.send_header('Content-type', content_type)
-        except urllib.error as e:
+        except HTTPError as e:
+            self.send_response(e.code)
+            self.end_headers()
+            self.wfile.write(self.process(e.read()).encode(self.encoding))
+        except Exception as e:
             print(e)
 
     @staticmethod
-    def process_html(html):
-        soup = BeautifulSoup(html, HttpHandler.htmlParser)
-        main_div = soup.find('div', {'class': 'js-mediator-article'})
+    def process(data):
+        html_text = html.unescape(data.decode(HttpHandler.encoding))
+        html_text = HttpHandler.process_html(html_text)
+        html_text = HttpHandler.process_links(html_text)
+        return html_text
+
+    @staticmethod
+    def process_html(html_text):
+        soup = BeautifulSoup(html_text, HttpHandler.htmlParser)
+        main_div = soup.find('body')
+        punctuation_list = '|'.join([re.escape(x) for x in punctuation]).replace('/', '\\/')
+        temp_data_list = []
+
+        for script in soup(["script", "style"]):
+            temp_data_list.append(copy.copy(script))
+            script.decompose()
+
+        for comment in soup.findAll(text=lambda text: isinstance(text, Comment)):
+            temp_data_list.append(copy.copy(comment))
+            comment.extract()
 
         for text in main_div.find_all(text=True):
             fixed_text = text
-            for text_parts_item in fixed_text.split(' '):
+            for text_parts_item in re.split("[\\s," + punctuation + "]", fixed_text):
                 pattern = text_parts_item + HttpHandler.text_suffix
                 if len(text_parts_item.strip()) == 6 and fixed_text.find(pattern) == -1:
-                    fixed_text = re.sub(r'(^|\s+)(' + re.escape(text_parts_item) + r')(\s+|$)', r'\1' + r'\2' +
-                                        HttpHandler.text_suffix + r'\3', fixed_text)
+                    fixed_text = re.sub(
+                        r'(^|\s+)(' + re.escape(text_parts_item) + r')(\s+|$|' + punctuation_list + ')',
+                        r'\1' + r'\2' + HttpHandler.text_suffix + r'\3', fixed_text)
             text.replace_with(BeautifulSoup(fixed_text, HttpHandler.htmlParser))
+
+        for item in temp_data_list:
+            soup.body.append(item)
+
         return str(soup)
 
     @staticmethod
-    def process_links(html):
-        soup = BeautifulSoup(html, HttpHandler.htmlParser)
+    def process_links(html_text):
+        soup = BeautifulSoup(html_text, HttpHandler.htmlParser)
 
         for link in soup.findAll('a', attrs={'href': re.compile('^' + HttpHandler.url_prefix)}):
             o = urlparse(link.get('href'))
@@ -66,7 +92,13 @@ class HttpHandler(BaseHTTPRequestHandler):
 
         for link in soup.findAll('use'):
             o = urlparse(link.get('xlink:href'))
-            link["xlink:href"] = o.path
+            link_value = o.path
+
+            svg_hash_value = re.search(r'#(.*)', link.get('xlink:href'))
+            if svg_hash_value:
+                link_value = link_value + svg_hash_value.group()
+
+            link["xlink:href"] = link_value
 
         return str(soup)
 

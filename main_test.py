@@ -1,11 +1,12 @@
 import unittest
+
 from main import HttpHandler
 
 
 class TestMainMethods(unittest.TestCase):
 
     def test_if_html_process_is_correct(self):
-        html = '<div class="js-mediator-article">Сейчас на фоне уязвимости Logjam все</div>'
+        html = '<html><body><div class="js-mediator-article">Сейчас на фоне уязвимости Logjam все</div></body></html>'
         result = HttpHandler.process_html(html)
         self.assertTrue(result.find('™') > -1)
 
