@@ -73,8 +73,8 @@ class HttpHandler(BaseHTTPRequestHandler):
                 pattern = text_parts_item + HttpHandler.text_suffix
                 if len(text_parts_item.strip()) == 6 and fixed_text.find(pattern) == -1:
                     fixed_text = re.sub(
-                        r'(^|\s+)(' + re.escape(text_parts_item) + r')(\s+|$|' + punctuation_list + ')',
-                        r'\1' + r'\2' + HttpHandler.text_suffix + r'\3', fixed_text)
+                        r'(^|\s+|' + punctuation_list + ')(' + re.escape(text_parts_item) + r')(\s+|$|' +
+                        punctuation_list + ')', r'\1' + r'\2' + HttpHandler.text_suffix + r'\3', fixed_text)
             text.replace_with(BeautifulSoup(fixed_text, HttpHandler.htmlParser))
 
         for item in temp_data_list:
