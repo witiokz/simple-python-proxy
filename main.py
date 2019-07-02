@@ -21,7 +21,7 @@ class HttpHandler(BaseHTTPRequestHandler):
     text_suffix = '&trade;'
     url_prefix = 'https://habr.com'
     encoding = "utf-8"
-    htmlParser = 'html.parser'
+    htmlParser = 'html5lib'
     default_article = 'ru/company/yandex/blog/258673/'
 
     def do_GET(self):
@@ -47,7 +47,7 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     @staticmethod
     def process(data):
-        html_text = html.unescape(data.decode(HttpHandler.encoding))
+        html_text = data.decode(HttpHandler.encoding)
         html_text = HttpHandler.process_html(html_text)
         html_text = HttpHandler.process_links(html_text)
         return html_text
@@ -74,8 +74,9 @@ class HttpHandler(BaseHTTPRequestHandler):
                 if len(text_parts_item.strip()) == 6 and fixed_text.find(pattern) == -1:
                     fixed_text = re.sub(
                         r'(^|\s+|' + punctuation_list + ')(' + re.escape(text_parts_item) + r')(\s+|$|' +
-                        punctuation_list + ')', r'\1' + r'\2' + HttpHandler.text_suffix + r'\3', fixed_text)
-            text.replace_with(BeautifulSoup(fixed_text, HttpHandler.htmlParser))
+                        punctuation_list + ')', r'\1' + r'\2' + html.unescape(HttpHandler.text_suffix) + r'\3',
+                        fixed_text)
+            text.replace_with(BeautifulSoup(html.escape(fixed_text), HttpHandler.htmlParser))
 
         for item in temp_data_list:
             soup.body.append(item)
